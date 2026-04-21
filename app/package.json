@@ -1,0 +1,16 @@
+{
+  "name": "dbb-health-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal Express app exposing /health for DBB DevOps test task",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

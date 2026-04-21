@@ -1,0 +1,129 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # OIDC
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  EB_APPLICATION: ${{ vars.EB_APPLICATION }}
+  EB_ENVIRONMENT: ${{ vars.EB_ENVIRONMENT }}
+  EB_VERSIONS_BUCKET: ${{ vars.EB_VERSIONS_BUCKET }}
+
+jobs:
+  deploy:
+    name: Build, push & deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-${{ github.run_id }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tags
+        id: tags
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+          REGISTRY="${{ steps.ecr-login.outputs.registry }}"
+          IMAGE_URI="${REGISTRY}/${ECR_REPOSITORY}"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_URI}:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "image_latest=${IMAGE_URI}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.tags.outputs.image_tag }}
+            ${{ steps.tags.outputs.image_latest }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Generate Dockerrun.aws.json
+        run: |
+          set -euo pipefail
+          cat > Dockerrun.aws.json <<EOF
+          {
+            "AWSEBDockerrunVersion": "1",
+            "Image": {
+              "Name": "${{ steps.tags.outputs.image_tag }}",
+              "Update": "true"
+            },
+            "Ports": [{ "ContainerPort": 8080 }]
+          }
+          EOF
+          zip -q app-${{ steps.tags.outputs.short_sha }}.zip Dockerrun.aws.json
+          cat Dockerrun.aws.json
+
+      - name: Upload version bundle to S3
+        run: |
+          set -euo pipefail
+          aws s3 cp "app-${{ steps.tags.outputs.short_sha }}.zip" \
+            "s3://${EB_VERSIONS_BUCKET}/versions/app-${{ steps.tags.outputs.short_sha }}.zip"
+
+      - name: Create EB application version
+        run: |
+          set -euo pipefail
+          aws elasticbeanstalk create-application-version \
+            --application-name "${EB_APPLICATION}" \
+            --version-label "v-${{ steps.tags.outputs.short_sha }}-${GITHUB_RUN_NUMBER}" \
+            --source-bundle "S3Bucket=${EB_VERSIONS_BUCKET},S3Key=versions/app-${{ steps.tags.outputs.short_sha }}.zip" \
+            --description "Commit ${GITHUB_SHA}"
+
+      - name: Deploy to Elastic Beanstalk
+        run: |
+          set -euo pipefail
+          aws elasticbeanstalk update-environment \
+            --application-name "${EB_APPLICATION}" \
+            --environment-name "${EB_ENVIRONMENT}" \
+            --version-label "v-${{ steps.tags.outputs.short_sha }}-${GITHUB_RUN_NUMBER}"
+
+      - name: Wait for environment to become Ready/Green
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            STATUS=$(aws elasticbeanstalk describe-environments \
+              --application-name "${EB_APPLICATION}" \
+              --environment-names "${EB_ENVIRONMENT}" \
+              --query 'Environments[0].[Status,Health]' --output text)
+            echo "[$i] ${STATUS}"
+            if [ "${STATUS}" = "Ready	Green" ]; then
+              echo "Deployment successful."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Timed out waiting for environment to stabilize"
+          exit 1
