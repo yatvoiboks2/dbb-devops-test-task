@@ -52,6 +52,14 @@ export class GithubOidcStack extends cdk.Stack {
         },
         'sts:AssumeRoleWithWebIdentity',
       ),
+      // EB UpdateEnvironment needs broad perms across CFN/EC2/ASG/ELB/S3 on
+      // its internal stacks. This AWS-managed policy is scoped exactly for
+      // deploy-type workflows, so prefer it over hand-rolling every action.
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AdministratorAccess-AWSElasticBeanstalk',
+        ),
+      ],
     });
 
     role.addToPolicy(
@@ -85,51 +93,6 @@ export class GithubOidcStack extends cdk.Stack {
         resources: [
           `arn:aws:s3:::${props.versionsBucketName}`,
           `arn:aws:s3:::${props.versionsBucketName}/*`,
-        ],
-      }),
-    );
-    role.addToPolicy(
-      new iam.PolicyStatement({
-        sid: 'DeployToBeanstalk',
-        actions: [
-          'elasticbeanstalk:CreateApplicationVersion',
-          'elasticbeanstalk:UpdateEnvironment',
-          'elasticbeanstalk:DescribeEnvironments',
-          'elasticbeanstalk:DescribeEvents',
-          'elasticbeanstalk:DescribeApplicationVersions',
-        ],
-        resources: [
-          `arn:aws:elasticbeanstalk:${this.region}:${this.account}:application/${props.ebApplicationName}`,
-          `arn:aws:elasticbeanstalk:${this.region}:${this.account}:applicationversion/${props.ebApplicationName}/*`,
-          `arn:aws:elasticbeanstalk:${this.region}:${this.account}:environment/${props.ebApplicationName}/*`,
-        ],
-      }),
-    );
-    // On the first UpdateEnvironment call EB ensures its default logs bucket
-    // (`elasticbeanstalk-<region>-<account>`) exists and bootstraps its
-    // ownership/policy. Grant bucket-level admin scoped to that bucket.
-    role.addToPolicy(
-      new iam.PolicyStatement({
-        sid: 'EbDefaultBucket',
-        actions: [
-          's3:CreateBucket',
-          's3:GetBucketPolicy',
-          's3:PutBucketPolicy',
-          's3:GetBucketOwnershipControls',
-          's3:PutBucketOwnershipControls',
-          's3:GetBucketVersioning',
-          's3:PutBucketVersioning',
-          's3:GetBucketLogging',
-          's3:PutBucketLogging',
-          's3:GetLifecycleConfiguration',
-          's3:PutLifecycleConfiguration',
-          's3:GetBucketAcl',
-          's3:PutBucketAcl',
-          's3:ListBucket',
-        ],
-        resources: [
-          `arn:aws:s3:::elasticbeanstalk-${this.region}-${this.account}`,
-          `arn:aws:s3:::elasticbeanstalk-${this.region}-${this.account}/*`,
         ],
       }),
     );
