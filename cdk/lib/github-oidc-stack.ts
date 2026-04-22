@@ -105,6 +105,18 @@ export class GithubOidcStack extends cdk.Stack {
         ],
       }),
     );
+    // On the first UpdateEnvironment call EB ensures its default logs bucket
+    // (`elasticbeanstalk-<region>-<account>`) exists. Grant the minimum so CI
+    // works on a fresh account without manual bootstrap.
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'EbDefaultBucket',
+        actions: ['s3:CreateBucket', 's3:GetBucketPolicy', 's3:PutBucketPolicy'],
+        resources: [
+          `arn:aws:s3:::elasticbeanstalk-${this.region}-${this.account}`,
+        ],
+      }),
+    );
 
     this.roleArn = role.roleArn;
 
