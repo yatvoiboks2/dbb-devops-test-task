@@ -19,6 +19,15 @@ Content-Length: 20
 {"status":"healthy"}
 ```
 
+## Deliverables (screenshots)
+
+| # | What                                              | Image                                                                    |
+| - | ------------------------------------------------- | ------------------------------------------------------------------------ |
+| 1 | `curl -i /health` → `200 OK` + JSON body          | ![/health](docs/screenshots/01-health-endpoint.png)                      |
+| 2 | GitHub Actions "Build & Deploy" pipeline success  | ![GitHub Actions](docs/screenshots/02-github-actions-success.png)        |
+| 3 | Elastic Beanstalk environment — `Ready/Ok`, running `v-e033d1a-5` | ![Elastic Beanstalk](docs/screenshots/03-elastic-beanstalk-env.png) |
+| 4 | ECR repository `dbb-health-app` (mutable tags, AES-256) | ![ECR](docs/screenshots/04-ecr-repository.png)                      |
+
 ## Architecture
 
 ```
