@@ -4,6 +4,21 @@ Dockerized Node.js web app deployed to AWS Elastic Beanstalk from an ECR image,
 with infrastructure provisioned via AWS CDK (TypeScript) and a GitHub Actions
 CI/CD pipeline.
 
+## Live demo
+
+- Environment URL: http://dbb-health-env.eba-a6xsa7be.eu-central-1.elasticbeanstalk.com
+- Health endpoint: http://dbb-health-env.eba-a6xsa7be.eu-central-1.elasticbeanstalk.com/health
+
+```
+$ curl -i http://dbb-health-env.eba-a6xsa7be.eu-central-1.elasticbeanstalk.com/health
+HTTP/1.1 200 OK
+Server: nginx/1.28.2
+Content-Type: application/json; charset=utf-8
+Content-Length: 20
+
+{"status":"healthy"}
+```
+
 ## Architecture
 
 ```
@@ -178,7 +193,7 @@ The ECR repo has `emptyOnDelete: true` and the versions bucket
 
 ## Troubleshooting
 
-- `solutionStackName` may drift over time. If `cdk deploy` complains that the
+- `solutionStackName` drifts over time. If `cdk deploy` complains that the
   stack is unsupported, list available ones and override:
   ```bash
   aws elasticbeanstalk list-available-solution-stacks \
@@ -189,4 +204,11 @@ The ECR repo has `emptyOnDelete: true` and the versions bucket
 - First `cdk deploy dbb-health-beanstalk` fails if no image has been pushed to
   ECR yet — this is by design. Follow the order in section 1.
 - EB environment stuck in `Severe`/`Degraded`: check `/var/log/eb-engine.log`
-  and `docker logs` on the instance via EB console → Logs → Request logs.
+  and `docker logs` on the instance via EB console → Logs → Request logs,
+  or via `aws elasticbeanstalk request-environment-info --info-type tail`
+  followed by `retrieve-environment-info`.
+- IAM role descriptions must stay within ASCII / Latin-1 (no em-dashes). IAM
+  rejects anything outside `[\u0009\u000A\u000D\u0020-\u007E\u00A1-\u00FF]`.
+- EB bootstraps a default logs bucket (`elasticbeanstalk-<region>-<account>`)
+  on first `UpdateEnvironment`. The GitHub deploy role uses AWS-managed
+  `AdministratorAccess-AWSElasticBeanstalk` which already covers this.
