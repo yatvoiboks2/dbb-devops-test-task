@@ -6,8 +6,10 @@ CI/CD pipeline.
 
 ## Live demo
 
-- Environment URL: http://dbb-health-env.eba-a6xsa7be.eu-central-1.elasticbeanstalk.com
 - Health endpoint: http://dbb-health-env.eba-a6xsa7be.eu-central-1.elasticbeanstalk.com/health
+
+> Only `GET /health` is implemented — hitting the root URL returns Express's
+> default `Cannot GET /` 404, which is expected.
 
 ```
 $ curl -i http://dbb-health-env.eba-a6xsa7be.eu-central-1.elasticbeanstalk.com/health
