@@ -13,6 +13,12 @@ import * as s3assets from 'aws-cdk-lib/aws-s3-assets';
 export interface BeanstalkStackProps extends cdk.StackProps {
   readonly appName: string;
   readonly ecrRepository: ecr.IRepository;
+  /**
+   * Literal repository name. Must be a concrete string at synth time so that
+   * it can be embedded in the initial Dockerrun.aws.json (which becomes a
+   * content-addressable S3 asset — tokens inside would not get resolved).
+   */
+  readonly ecrRepositoryName: string;
   readonly instanceType?: string;
   readonly solutionStackName?: string;
 }
@@ -33,7 +39,7 @@ export class BeanstalkStack extends cdk.Stack {
     const solutionStackName =
       props.solutionStackName ??
       this.node.tryGetContext('solutionStack') ??
-      '64bit Amazon Linux 2023 v4.3.3 running Docker';
+      '64bit Amazon Linux 2023 v4.12.1 running Docker';
 
     const vpc = new ec2.Vpc(this, 'Vpc', {
       maxAzs: 2,
@@ -53,7 +59,7 @@ export class BeanstalkStack extends cdk.Stack {
 
     const instanceRole = new iam.Role(this, 'InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'EB EC2 instance role — web tier + ECR pull',
+      description: 'EB EC2 instance role - web tier + ECR pull',
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('AWSElasticBeanstalkWebTier'),
         iam.ManagedPolicy.fromAwsManagedPolicyName('AWSElasticBeanstalkMulticontainerDocker'),
@@ -73,18 +79,18 @@ export class BeanstalkStack extends cdk.Stack {
 
     const serviceRole = new iam.Role(this, 'ServiceRole', {
       assumedBy: new iam.ServicePrincipal('elasticbeanstalk.amazonaws.com'),
-      description: 'EB service role — enhanced health + managed updates',
+      description: 'EB service role - enhanced health + managed updates',
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'service-role/AWSElasticBeanstalkEnhancedHealth',
         ),
         iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy',
+          'AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy',
         ),
       ],
     });
 
-    const repoUri = `${this.account}.dkr.ecr.${this.region}.amazonaws.com/${props.ecrRepository.repositoryName}`;
+    const repoUri = `${this.account}.dkr.ecr.${this.region}.amazonaws.com/${props.ecrRepositoryName}`;
 
     const bundleDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eb-bundle-'));
     fs.writeFileSync(
@@ -133,7 +139,7 @@ export class BeanstalkStack extends cdk.Stack {
         s3Bucket: sourceBundle.s3BucketName,
         s3Key: sourceBundle.s3ObjectKey,
       },
-      description: 'Initial version — references ECR :latest',
+      description: 'Initial version - references ECR :latest',
     });
     appVersion.addDependency(ebApp);
 

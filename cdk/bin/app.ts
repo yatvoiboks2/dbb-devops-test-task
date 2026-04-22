@@ -25,6 +25,7 @@ const beanstalk = new BeanstalkStack(app, `${appName}-beanstalk`, {
   env,
   appName,
   ecrRepository: ecr.repository,
+  ecrRepositoryName: ecrRepoName,
   description: 'Elastic Beanstalk environment running the Docker image from ECR',
 });
 
