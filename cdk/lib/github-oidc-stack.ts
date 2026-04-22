@@ -106,14 +106,30 @@ export class GithubOidcStack extends cdk.Stack {
       }),
     );
     // On the first UpdateEnvironment call EB ensures its default logs bucket
-    // (`elasticbeanstalk-<region>-<account>`) exists. Grant the minimum so CI
-    // works on a fresh account without manual bootstrap.
+    // (`elasticbeanstalk-<region>-<account>`) exists and bootstraps its
+    // ownership/policy. Grant bucket-level admin scoped to that bucket.
     role.addToPolicy(
       new iam.PolicyStatement({
         sid: 'EbDefaultBucket',
-        actions: ['s3:CreateBucket', 's3:GetBucketPolicy', 's3:PutBucketPolicy'],
+        actions: [
+          's3:CreateBucket',
+          's3:GetBucketPolicy',
+          's3:PutBucketPolicy',
+          's3:GetBucketOwnershipControls',
+          's3:PutBucketOwnershipControls',
+          's3:GetBucketVersioning',
+          's3:PutBucketVersioning',
+          's3:GetBucketLogging',
+          's3:PutBucketLogging',
+          's3:GetLifecycleConfiguration',
+          's3:PutLifecycleConfiguration',
+          's3:GetBucketAcl',
+          's3:PutBucketAcl',
+          's3:ListBucket',
+        ],
         resources: [
           `arn:aws:s3:::elasticbeanstalk-${this.region}-${this.account}`,
+          `arn:aws:s3:::elasticbeanstalk-${this.region}-${this.account}/*`,
         ],
       }),
     );
